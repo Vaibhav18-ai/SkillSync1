@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkillSync: Coordinator dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#f5f7fb;--card:#fff;--ink:#14213d;--mute:#5d6b85;--line:#e0e6f0;--brand:#0d8f83;--soft:#e0f4f1;--warn:#c2410c;--warnbg:#ffedd5;--track:#e6ebf3}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif}
+  .wrap{max-width:1040px;margin:0 auto;padding:16px}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+  .logo{font-weight:700;font-size:1.3rem}.logo span{color:var(--brand)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .grid{display:grid;gap:16px}.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}.g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+  h2{margin:24px 0 12px;font-size:1.25rem} h3{margin:0 0 4px;font-size:1.05rem}
+  .muted{color:var(--mute);font-size:.92rem}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .btn{border:0;background:var(--brand);color:#fff;padding:8px 14px;border-radius:10px;font:600 .92rem system-ui;cursor:pointer;margin:4px 6px 0 0}
+  .btn.ghost{background:none;color:var(--ink);border:1px solid var(--line)} .btn:disabled{opacity:.55;cursor:default}
+  .badge{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--soft);color:var(--brand);font-size:.82rem;font-weight:600}
+  .badge.warn{background:var(--warnbg);color:var(--warn)}
+  label{display:block;font-weight:600;margin:10px 0 4px;font-size:.93rem}
+  input,select,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--ink)}
+  .skillrow{display:flex;align-items:center;gap:10px;margin:6px 0} .skillrow span{flex:1} .skillrow input{width:80px}
+  details summary{cursor:pointer;font-weight:700;font-size:1.05rem}
+  .chip{display:inline-block;background:var(--track);border-radius:8px;padding:2px 9px;margin:2px 3px 2px 0;font-size:.85rem}
+  .chip.lead{background:var(--brand);color:#fff;font-weight:600}
+  .stat{font-size:1.5rem;font-weight:700;color:var(--brand);line-height:1.1}
+  .box{position:relative;height:240px}
+  table{width:100%;border-collapse:collapse;font-size:.93rem} th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td b{color:var(--brand)}
+  #msg{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;opacity:0;transition:opacity .2s;max-width:90vw}
+  #msg.show{opacity:1}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">Skill<span>Sync</span> <span class="muted" style="font-weight:400">Coordinator</span></div>
+    <div><span id="who" class="muted"></span> <button class="btn ghost" onclick="logout()">Log out</button></div>
+  </header>
+
+  <div class="card">
+    <details>
+      <summary>Create a competition</summary>
+      <div class="grid g2" style="margin-top:8px">
+        <div>
+          <label for="cname">Name</label><input id="cname" value="Campus AI Hackathon">
+          <label for="cdesc">Description</label><textarea id="cdesc" rows="2">48-hour ML challenge</textarea>
+          <label for="ctype">Type</label>
+          <select id="ctype"><option value="ml">AI/ML</option><option value="dsa">DSA / coding</option><option value="hardware">Hardware / IoT</option><option value="web">Web development</option><option value="other">Other</option></select>
+          <div class="grid g2">
+            <div><label for="cteams">Number of teams</label><input id="cteams" type="number" value="5" min="2" max="20"></div>
+            <div><label for="csize">Team size</label><input id="csize" type="number" value="6" min="2" max="10"></div>
+            <div><label for="ctol">Allowed gap (score)</label><input id="ctol" type="number" value="0.8" step="0.1" min="0.1" max="3"></div>
+            <div><label for="cdead">Registration deadline</label><input id="cdead" type="date"></div>
+          </div>
+        </div>
+        <div>
+          <label>Skill weights (0 = not required)</label>
+          <p class="muted">Higher weight means the skill counts more toward each student’s score.</p>
+          <div id="skillw"></div>
+        </div>
+      </div>
+      <button class="btn" onclick="createComp()">Create competition</button>
+    </details>
+  </div>
+
+  <h2>Your competitions</h2>
+  <div id="comps" class="grid g3"></div>
+
+  <div id="panel" style="margin-top:8px"></div>
+</div>
+<div id="msg" role="status"></div>
+
+<script src="api.js"></script>
+<script>
+const me = requireRole("coordinator");
+const $ = (s) => document.querySelector(s);
+$("#who").textContent = me.name;
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(t){ const m=$("#msg"); m.textContent=t; m.classList.add("show"); setTimeout(()=>m.classList.remove("show"),3500); }
+const label = (s) => s.replace(/_/g," ");
+
+let skills = [], chart = null, run = null, comps = [];
+
+const todayStr = new Date().toISOString().slice(0,10);
+const d = new Date(); d.setDate(d.getDate()+30);
+$("#cdead").value = d.toISOString().slice(0,10);
+$("#cdead").min = todayStr;
+
+async function init(){
+  skills = await api("/skills");
+  $("#skillw").innerHTML = skills.map(s =>
+    `<div class="skillrow"><span>${esc(s.name)}</span><input type="number" min="0" max="10" step="1" value="0" data-id="${s.id}" aria-label="Weight for ${esc(s.name)}"></div>`).join("");
+  await loadComps();
+}
+
+async function createComp(){
+  const reqs = [...document.querySelectorAll("#skillw input")].filter(i => +i.value > 0)
+    .map(i => ({skill_id:+i.dataset.id, weight:+i.value, min_level:0, mandatory:false}));
+  if (!reqs.length) return toast("Give at least one skill a weight above 0.");
+  try {
+    const c = await api("/competitions", {method:"POST", body:{
+      name:$("#cname").value, description:$("#cdesc").value, comp_type:$("#ctype").value,
+      team_size:+$("#csize").value, num_teams:+$("#cteams").value, fairness_tolerance:+$("#ctol").value,
+      formation_mode:"preference", deadline:$("#cdead").value || null, requirements:reqs}});
+    toast(`Created "${c.name}" (id ${c.id}). Publish it when you are ready.`);
+    loadComps();
+  } catch (e) { toast(e.message); }
+}
+
+async function loadComps(){
+  comps = await api("/competitions");
+  $("#comps").innerHTML = comps.length ? comps.map(c => {
+    const s = c.status; let btns = "";
+    if (s === "draft") btns = `<button class="btn" onclick="act(${c.id},'publish')">Publish</button>`;
+    if (s === "registration_open") btns = `<button class="btn" onclick="act(${c.id},'close-registration')">Close registration</button>`;
+    if (["registration_closed","teams_proposed","under_review"].includes(s)) btns = `<button class="btn" onclick="generate(${c.id})">Generate teams</button>`;
+    if (["finalized","ongoing","completed"].includes(s)) btns = `<button class="btn" onclick="viewTeams(${c.id})">View teams</button>`;
+    return `<div class="card"><h3>#${c.id} ${esc(c.name)}</h3>
+      <p class="muted">${esc(c.requirements.map(r=>r.skill).join(", "))}</p>
+      <span class="badge ${s==="draft"?"warn":""}">${esc(label(s))}</span>
+      <p class="muted" style="margin:6px 0 0">Join code ${esc(c.join_code)}</p>
+      <div>${btns}<button class="btn ghost" onclick="applicants(${c.id})">Applicants</button></div></div>`;
+  }).join("") : '<p class="muted">You have not created a competition yet.</p>';
+}
+
+async function act(id, name){
+  try { await api(`/competitions/${id}/${name}`, {method:"POST"}); toast("Done."); loadComps(); }
+  catch (e) { toast(e.message); }
+}
+
+async function applicants(id){
+  try {
+    const r = await api(`/competitions/${id}/applicants`);
+    $("#panel").innerHTML = `<h2>Applicants for ${esc(r.competition)} (${r.count})</h2><div class="card">
+      ${r.count ? `<table><tr><th>Student</th><th>Score</th><th>Wants to lead</th></tr>
+      ${r.applicants.map(a=>`<tr><td>${esc(a.name)}</td><td>${a.score.toFixed(2)}</td><td>${a.wants_to_lead?"Yes":""}</td></tr>`).join("")}</table>`
+      : '<p class="muted">No confirmed applicants yet.</p>'}</div>`;
+    $("#panel").scrollIntoView({behavior:"smooth"});
+  } catch (e) { toast(e.message); }
+}
+
+async function generate(id){
+  try {
+    toast("Generating teams, please wait.");
+    const r = await api(`/competitions/${id}/team-generation`, {method:"POST"});
+    run = {...r, compId:id, tol:(comps.find(c=>c.id===id)||{}).fairness_tolerance || 0.8};
+    showOption(0); loadComps();
+  } catch (e) { toast(e.message); }
+}
+
+function showOption(i){
+  const o = run.options[i], m = o.metrics;
+  const tabs = run.options.map((_,k)=>`<button class="btn ${k===i?"":"ghost"}" onclick="showOption(${k})">Option ${k+1}</button>`).join("");
+  $("#panel").innerHTML = `
+    <h2>Proposed teams (run ${run.run_id})</h2>
+    ${run.warnings.map(w=>`<p class="badge warn">${esc(w)}</p>`).join(" ")}
+    <div class="tabs">${tabs}</div>
+    <div class="grid g2" style="margin-top:12px">
+      <div class="card">
+        <div class="row"><h3>Fairness check</h3><span class="badge ${m.within_tolerance?"":"warn"}">${m.within_tolerance?"Within the limit":"Over the limit"}</span></div>
+        <p class="muted">Highest team average minus lowest is <b>${m.spread.toFixed(2)}</b>. Your limit is ${run.tol}.</p>
+        <div class="grid g2">
+          <div><div class="stat">${m.prefer_met}/${m.prefer_total}</div><div class="muted">teammate wishes met</div></div>
+          <div><div class="stat">${m.avoid_violations}</div><div class="muted">separation requests broken</div></div>
+        </div>
+        <button class="btn" style="margin-top:12px" onclick="finalize(${i})">Finalize option ${i+1}</button>
+        <p class="muted">Students see their team only after you finalize.</p>
+      </div>
+      <div class="card"><h3>Team averages</h3><div class="box"><canvas id="bars"></canvas></div></div>
+    </div>
+    <div class="grid g3" style="margin-top:16px">${teamCards(o.teams)}</div>`;
+  if (chart) chart.destroy();
+  chart = new Chart($("#bars"), {type:"bar",
+    data:{labels:o.teams.map(t=>"Team "+t.team_no), datasets:[{data:o.teams.map(t=>t.avg), backgroundColor:"#0d8f83", borderRadius:6}]},
+    options:{maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{y:{min:Math.max(0,Math.min(...o.teams.map(t=>t.avg))-1.5), max:10}}}});
+}
+
+const teamCards = (teams) => teams.map(t =>
+  `<div class="card"><div class="row"><h3>Team ${t.team_no}</h3><b style="color:var(--brand)">${t.avg.toFixed(2)}</b></div>
+   <p class="muted">${t.members.length} members</p>
+   ${t.members.map(m=>`<span class="chip ${m.is_leader?"lead":""}">${esc(m.name)}${m.is_leader?" (leader)":""}</span>`).join("")}</div>`).join("");
+
+async function finalize(i){
+  if (!confirm("Finalize these teams? Students will see them and this cannot be undone.")) return;
+  try {
+    await api(`/competitions/${run.compId}/finalize-teams`, {method:"POST", body:{run_id:run.run_id, option_index:i}});
+    toast("Teams finalized."); await loadComps(); viewTeams(run.compId);
+  } catch (e) { toast(e.message); }
+}
+
+async function viewTeams(id){
+  try {
+    const t = await api(`/competitions/${id}/teams`);
+    $("#panel").innerHTML = `
+      <div class="row"><h2>Final teams</h2>
+        <div><button class="btn" onclick="report(${id})">Fairness report vs random</button>
+        <button class="btn ghost" onclick="downloadCsv(${id})">Download CSV</button></div></div>
+      <div id="report"></div>
+      <div class="grid g3">${teamCards(t.map(x=>({team_no:x.team_no, avg:x.avg_score, members:x.members})))}</div>`;
+    $("#panel").scrollIntoView({behavior:"smooth"});
+  } catch (e) { toast(e.message); }
+}
+
+async function report(id){
+  try {
+    const r = await api(`/competitions/${id}/fairness-report`), o = r.ours, x = r.random;
+    $("#report").innerHTML = `<div class="card" style="margin-bottom:16px">
+      <h3>SkillSync vs random assignment (${r.trials} random trials)</h3>
+      <table>
+        <tr><th>Measure</th><th>SkillSync</th><th>Random average</th></tr>
+        <tr><td>Gap between highest and lowest team average</td><td><b>${o.spread.toFixed(2)}</b></td><td>${x.avg_spread}</td></tr>
+        <tr><td>Within your ${r.tolerance} limit</td><td><b>${o.within_tolerance ? "Yes" : "No"}</b></td><td>${x.pct_within_tolerance}% of trials</td></tr>
+        <tr><td>Teammate wishes met (out of ${o.prefer_total})</td><td><b>${o.prefer_met}</b></td><td>${x.avg_prefer_met}</td></tr>
+        <tr><td>Separation requests broken</td><td><b>${o.avoid_violations}</b></td><td>${x.avg_avoid_violations}</td></tr>
+        <tr><td>Skill imbalance across teams (lower is better)</td><td><b>${o.skill_gap}</b></td><td>${x.avg_skill_gap}</td></tr>
+      </table></div>`;
+  } catch (e) { toast(e.message); }
+}
+
+async function downloadCsv(id){
+  try {
+    const res = await fetch(API + `/competitions/${id}/export`, {headers:{Authorization:"Bearer " + localStorage.getItem("token")}});
+    if (!res.ok) return toast("Could not export the teams.");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = `teams_competition_${id}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { toast("Could not export the teams."); }
+}
+
+init().catch(e => toast(e.message));
+</script>
+</body>
+</html>

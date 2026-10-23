@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkillSync: Log in</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f7fb;font-family:system-ui,sans-serif;color:#14213d}
+  form{background:#fff;border:1px solid #e0e6f0;border-radius:14px;padding:28px;width:min(360px,92vw)}
+  h1{margin:0 0 4px;font-size:1.6rem} p{margin:0 0 18px;color:#5d6b85}
+  label{display:block;font-weight:600;margin:12px 0 4px}
+  input{width:100%;padding:10px;border:1px solid #e0e6f0;border-radius:10px;font:inherit;box-sizing:border-box}
+  button{margin-top:18px;width:100%;padding:11px;border:0;border-radius:10px;background:#0d8f83;color:#fff;font:600 1rem system-ui;cursor:pointer}
+  #err{color:#c2410c;margin-top:12px;min-height:1.2em}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<form id="f">
+  <h1>SkillSync</h1><p>Log in to see your competitions and teams.</p>
+  <label for="student1@skillsync.test">Email</label><input id="email" type="email" required value="student1@skillsync.test">
+  <label for="Demo@1234">Password</label><input id="pw" type="password" required value="Demo@1234">
+  <button type="submit">Log in</button>
+  <div id="err" role="alert"></div>
+</form>
+<script src="api.js"></script>
+<script>
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  const err = document.getElementById("err"); err.textContent = "";
+  try {
+    const r = await api("/auth/login", { method: "POST",
+      body: { email: document.getElementById("email").value, password: document.getElementById("pw").value } });
+    localStorage.setItem("token", r.access_token);
+    localStorage.setItem("user", JSON.stringify(r.user));
+    location.href = r.user.role === "coordinator" ? "coordinator-dashboard.html" : "student-dashboard.html";
+  } catch (ex) { err.textContent = ex.message; }
+};
+</script>
+</body>
+</html>

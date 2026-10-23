@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkillSync: Team workspace</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#f5f7fb;--card:#fff;--ink:#14213d;--mute:#5d6b85;--line:#e0e6f0;--brand:#0d8f83;--soft:#e0f4f1;--warn:#c2410c;--warnbg:#ffedd5;--track:#e6ebf3}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif}
+  .wrap{max-width:1040px;margin:0 auto;padding:16px}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+  .logo{font-weight:700;font-size:1.3rem}.logo span{color:var(--brand)}
+  a{color:var(--brand)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}.g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  h1{margin:0;font-size:1.5rem} h2{margin:22px 0 10px;font-size:1.2rem} h3{margin:0 0 6px;font-size:1rem}
+  .muted{color:var(--mute);font-size:.9rem}
+  .error{color:var(--warn);background:var(--warnbg);border-radius:10px;padding:10px 14px;margin:10px 0;display:none}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+  .btn{border:0;background:var(--brand);color:#fff;padding:6px 12px;border-radius:9px;font:600 .88rem system-ui;cursor:pointer;margin:4px 6px 0 0}
+  .btn.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
+  .badge{display:inline-block;padding:2px 9px;border-radius:99px;background:var(--soft);color:var(--brand);font-size:.8rem;font-weight:600}
+  .badge.warn{background:var(--warnbg);color:var(--warn)}
+  .bar{height:10px;background:var(--track);border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand);transition:width .3s}
+  .chip{display:inline-block;background:var(--track);border-radius:8px;padding:2px 9px;margin:2px 3px 2px 0;font-size:.85rem}
+  .chip.lead{background:var(--brand);color:#fff;font-weight:600}
+  .task{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;background:#fff}
+  label{display:block;font-weight:600;margin:8px 0 3px;font-size:.88rem}
+  input,select{width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;font:inherit}
+  .box{position:relative;height:220px}
+  #msg{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;opacity:0;transition:opacity .2s;max-width:90vw}
+  #msg.show{opacity:1}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">Skill<span>Sync</span></div>
+    <div><a id="back" href="#">Back to dashboard</a> · <button class="btn ghost" onclick="logout()">Log out</button></div>
+  </header>
+
+  <h1 id="title">Team workspace</h1>
+  <p class="muted" id="sub">Loading your team…</p>
+  <div class="error" id="err" role="alert"></div>
+
+  <div id="content" style="display:none">
+    <div class="grid g2">
+      <div class="card">
+        <div class="row"><h3>Progress</h3><b id="pct">0%</b></div>
+        <div class="bar"><i id="pbar" style="width:0%"></i></div>
+        <p class="muted" id="ptext"></p>
+        <h3 style="margin-top:12px">Members</h3><div id="members"></div>
+      </div>
+      <div class="card"><h3>Planned hours per member</h3><div class="box"><canvas id="hours"></canvas></div></div>
+    </div>
+
+    <h2>Milestones</h2>
+    <div class="card">
+      <div id="miles"></div>
+      <div id="mileform" style="display:none;margin-top:10px">
+        <div class="grid g2">
+          <div><label for="mtitle">New milestone</label><input id="mtitle" placeholder="e.g. Dataset ready"></div>
+          <div><label for="mdue">Due date</label><input id="mdue" type="date"></div>
+        </div>
+        <button class="btn" onclick="addMilestone()">Add milestone</button>
+      </div>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="card" id="taskform" style="display:none;margin-bottom:14px">
+      <div class="grid g3">
+        <div><label for="ttitle">Task</label><input id="ttitle" placeholder="e.g. Clean the data"></div>
+        <div><label for="tassignee">Assigned to</label><select id="tassignee"></select></div>
+        <div><label for="thours">Estimated hours</label><input id="thours" type="number" min="0" max="200" value="2"></div>
+        <div><label for="tdead">Deadline</label><input id="tdead" type="date"></div>
+      </div>
+      <button class="btn" onclick="addTask()">Add task</button>
+    </div>
+    <div class="grid g3">
+      <div class="card"><h3>To do</h3><div id="col-todo"></div></div>
+      <div class="card"><h3>In progress</h3><div id="col-doing"></div></div>
+      <div class="card"><h3>Done</h3><div id="col-done"></div></div>
+    </div>
+  </div>
+</div>
+<div id="msg" role="status"></div>
+
+<script src="api.js"></script>
+<script>
+const user = JSON.parse(localStorage.getItem("user") || "null");
+if (!user) location.href = "login.html";
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(t){ const m=$("#msg"); m.textContent=t; m.classList.add("show"); setTimeout(()=>m.classList.remove("show"),3500); }
+function showError(t){ const e=$("#err"); e.textContent=t; e.style.display="block"; }
+$("#back").href = user && user.role === "coordinator" ? "coordinator-dashboard.html" : "student-dashboard.html";
+
+let teamId = new URLSearchParams(location.search).get("team");
+let chart;
+const today = new Date().toISOString().slice(0,10);
+$("#tdead").min = today;
+$("#mdue").min = today;
+
+// If the link has no valid team id, find the student's own team(s).
+async function resolveTeam(){
+  if (teamId && /^\d+$/.test(teamId)) return true;
+  const mine = await api("/teams/mine");
+  if (!mine.length) throw new Error("You are not in a team yet. Teams appear here after the coordinator finalizes them.");
+  if (mine.length === 1) {
+    teamId = String(mine[0].team_id);
+    history.replaceState(null, "", "?team=" + teamId);
+    return true;
+  }
+  $("#sub").innerHTML = "You are in more than one team. Choose one: " +
+    mine.map(t => `<a href="?team=${t.team_id}">${esc(t.competition)} (Team ${t.team_no})</a>`).join(" · ");
+  return false;
+}
+
+async function load(){
+  $("#err").style.display = "none";
+  if (!(await resolveTeam())) return;
+  const d = await api(`/teams/${teamId}/dashboard`);
+  $("#content").style.display = "block";
+  $("#title").textContent = `Team ${d.team.team_no}`;
+  $("#sub").textContent = d.team.competition;
+  $("#pct").textContent = d.progress.percent + "%";
+  $("#pbar").style.width = d.progress.percent + "%";
+  $("#ptext").textContent = `${d.progress.done} of ${d.progress.total} tasks done`;
+  $("#members").innerHTML = d.members.map(m =>
+    `<span class="chip ${m.is_leader?"lead":""}">${esc(m.name)}${m.is_leader?" (leader)":""}</span>`).join("")
+    + (d.team.leader_id ? "" : '<p class="muted">This team has no leader yet. Any member can manage milestones.</p>');
+
+  if (chart) chart.destroy();
+  chart = new Chart($("#hours"), {type:"bar",
+    data:{labels:d.members.map(m=>m.name), datasets:[{data:d.members.map(m=>m.hours), backgroundColor:"#0d8f83", borderRadius:6}]},
+    options:{maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}});
+
+  $("#miles").innerHTML = d.milestones.length ? d.milestones.map(m => {
+    const late = !m.done && m.due_date && m.due_date < today;
+    return `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <span>${m.done ? "✔ " : ""}${esc(m.title)} <span class="muted">${m.due_date || ""}</span> ${late ? '<span class="badge warn">Overdue</span>' : ""}</span>
+      ${d.me.can_manage ? `<button class="btn ghost" onclick="toggleMile(${m.id})">${m.done ? "Reopen" : "Mark done"}</button>` : ""}</div>`;
+  }).join("") : '<p class="muted">No milestones yet.</p>';
+  $("#mileform").style.display = d.me.can_manage ? "block" : "none";
+
+  $("#taskform").style.display = d.me.is_member ? "block" : "none";
+  const keep = $("#tassignee").value;
+  $("#tassignee").innerHTML = '<option value="">Unassigned</option>' +
+    d.members.map(m => `<option value="${m.user_id}">${esc(m.name)}</option>`).join("");
+  $("#tassignee").value = keep;
+
+  for (const s of ["todo","doing","done"]) {
+    const list = d.tasks.filter(t => t.status === s);
+    $("#col-"+s).innerHTML = list.length ? list.map(t => {
+      const late = s !== "done" && t.deadline && t.deadline < today;
+      const moves = !t.can_edit ? "" : [["todo","To do"],["doing","Start"],["done","Done"]]
+        .filter(([k]) => k !== s).map(([k,l]) => `<button class="btn ghost" onclick="setStatus(${t.id},'${k}')">${l}</button>`).join("");
+      return `<div class="task"><b>${esc(t.title)}</b>
+        <div class="muted">${esc(t.assignee || "Unassigned")} · ${t.estimated_hours}h ${t.deadline ? "· due " + t.deadline : ""}</div>
+        ${late ? '<span class="badge warn">Overdue</span>' : ""}<div>${moves}</div></div>`;
+    }).join("") : '<p class="muted">Nothing here.</p>';
+  }
+}
+
+async function addTask(){
+  try {
+    await api(`/teams/${teamId}/tasks`, {method:"POST", body:{
+      title:$("#ttitle").value, assignee_id:$("#tassignee").value ? +$("#tassignee").value : null,
+      estimated_hours:+$("#thours").value || 0, deadline:$("#tdead").value || null}});
+    $("#ttitle").value = ""; toast("Task added."); await load();
+  } catch (e) { toast(e.message); }
+}
+async function setStatus(id, status){
+  try { await api(`/teams/${teamId}/tasks/${id}`, {method:"PATCH", body:{status}}); await load(); }
+  catch (e) { toast(e.message); }
+}
+async function addMilestone(){
+  try {
+    await api(`/teams/${teamId}/milestones`, {method:"POST", body:{title:$("#mtitle").value, due_date:$("#mdue").value || null}});
+    $("#mtitle").value = ""; toast("Milestone added."); await load();
+  } catch (e) { toast(e.message); }
+}
+async function toggleMile(id){
+  try { await api(`/teams/${teamId}/milestones/${id}`, {method:"PATCH"}); await load(); }
+  catch (e) { toast(e.message); }
+}
+
+load().catch(e => { $("#sub").textContent = ""; showError("Could not load this team: " + e.message); });
+</script>
+</body>
+</html>
